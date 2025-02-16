@@ -164,4 +164,4 @@ def generate_remixing_suggestions(outfit_description):
         return f"Error generating remixing suggestions: {str(e)}"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000, debug=False)  # Run in production mode
+    app.run(host='0.0.0.0', port=10000, debug=True)  # Run in production mode
