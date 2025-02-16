@@ -16,7 +16,9 @@ if not api_key:
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+
+# Enable CORS for requests from http://localhost:3000 and your Firebase URL
+CORS(app, origins=["http://localhost:3000", "https://ai-fashion-advisor.web.app/"])
 
 # Load CLIP model and processor
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -28,21 +30,29 @@ os.makedirs('uploads', exist_ok=True)
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
+        print("Received upload request")  # Debugging
         if 'file' not in request.files:
+            print("No file uploaded")  # Debugging
             return jsonify({'error': 'No file uploaded'}), 400
 
         file = request.files['file']
+        print(f"File received: {file.filename}")  # Debugging
         image_path = os.path.join('uploads', file.filename)
         file.save(image_path)
+        print(f"File saved to: {image_path}")  # Debugging
 
         # Analyze the outfit using CLIP
         feedback, outfit_description = analyze_outfit(image_path)
+        print(f"Feedback: {feedback}")  # Debugging
+        print(f"Outfit description: {outfit_description}")  # Debugging
 
         # Generate outfit recommendations based on the top style
         recommendations = generate_suggestions(feedback)
+        print(f"Recommendations: {recommendations}")  # Debugging
 
         # Generate remixing suggestions
         remixing_suggestions = generate_remixing_suggestions(outfit_description)
+        print(f"Remixing suggestions: {remixing_suggestions}")  # Debugging
 
         return jsonify({
             'feedback': feedback,
@@ -51,6 +61,7 @@ def upload():
         })
 
     except Exception as e:
+        print(f"Error: {str(e)}")  # Debugging
         return jsonify({'error': str(e)}), 500
 
 def analyze_outfit(image_path):
@@ -86,7 +97,7 @@ def generate_suggestions(style):
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://your-website.com",  # Replace with your website
+            "HTTP-Referer": "https://ai-fashion-advisor.web.app/",  # Replace with your Firebase URL
             "X-Title": "Outfit Advisor"  # Project title
         }
         data = {
@@ -94,7 +105,7 @@ def generate_suggestions(style):
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a fashion advisor. Provide 3 concise outfit suggestions based on the user's style. For each suggestion, include:\n- **Top**: The top to wear.\n- **Bottom**: The bottom to wear.\n- **Footwear**: Recommended footwear.\n- **Accessories**: Recommended accessories.\nEach suggestion should be a single line, starting with a number and a name (e.g., '1. **Casual Chic**'). Do not include explanations or introductions."
+                    "content": "You are a fashion advisor. Provide 3 concise outfit suggestions based on the user's style. For each suggestion, include:\n- **Top**: The top to wear.\n- **Bottom**: The bottom to wear.\n- **Footwear**: Recommended footwear.\n- **Accessories**: Recommended accessories.\nEach suggestion should be a single line, starting with a number and a name (e.g., '1. **Casual Chic**'). Do not include explanations or introductions so only give the bullet points dont speak to yourself."
                 },
                 {
                     "role": "user",
@@ -122,7 +133,7 @@ def generate_remixing_suggestions(outfit_description):
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://your-website.com",  # Replace with your website
+            "HTTP-Referer": "https://ai-fashion-advisor.web.app/",  # Replace with your Firebase URL
             "X-Title": "Outfit Advisor"  # Project title
         }
         data = {
@@ -151,5 +162,6 @@ def generate_remixing_suggestions(outfit_description):
     except Exception as e:
         print("Error generating remixing suggestions:", str(e))  # Debugging
         return f"Error generating remixing suggestions: {str(e)}"
+
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(host='0.0.0.0', port=10000, debug=False)  # Run in production mode
