@@ -17,10 +17,7 @@ if not api_key:
 # Initialize Flask app
 app = Flask(__name__)
 
-# Enable CORS for requests from http://localhost:3000 and your Firebase URL
-CORS(app, origins=["http://localhost:3000", "https://ai-fashion-advisor.web.app"])
-
-CORS(app, origins=["*"])
+CORS(app, resources={r"/*": {"origins": "https://ai-fashion-advisor.web.app"}}) #Enable CORS for all routes
 
 # Load CLIP model and processor
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -166,4 +163,4 @@ def generate_remixing_suggestions(outfit_description):
         return f"Error generating remixing suggestions: {str(e)}"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000, debug=True)  # True=enabled , False=disabled
+    app.run(debug=True)  # True=enabled , False=disabled
