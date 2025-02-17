@@ -18,7 +18,7 @@ if not api_key:
 app = Flask(__name__)
 
 # Configure CORS (restrictive in production)
-CORS(app, resources={r"/upload": {"origins": "https://ai-fashion-advisor.web.app"}})  # Correct route
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
 
 # Load CLIP model and processor (move outside the function for faster loading during startup)
 try:
