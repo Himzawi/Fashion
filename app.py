@@ -15,6 +15,9 @@ api_key = os.getenv("OPENROUTER_API_KEY")
 if not api_key:
     raise ValueError("OPENROUTER_API_KEY is not set in Api.env")
 
+# Add OpenWeatherMap API key
+weather_api_key = os.getenv("OPENWEATHER_API_KEY", "f2055b01a1ae00d86ae74afb0d6e2ec3")
+
 app = Flask(__name__)
 
 # Configure CORS (restrictive in production)
@@ -32,6 +35,31 @@ except Exception as e:
 os.makedirs('uploads', exist_ok=True)
 
 
+@app.route('/weather', methods=['GET'])
+def get_weather():
+    try:
+        # Get latitude and longitude from request parameters
+        latitude = request.args.get('lat')
+        longitude = request.args.get('lon')
+        
+        if not latitude or not longitude:
+            return jsonify({'error': 'Latitude and longitude are required'}), 400
+            
+        # Call OpenWeatherMap API
+        url = f"https://api.openweathermap.org/data/2.5/weather?lat={latitude}&lon={longitude}&appid={weather_api_key}&units=metric"
+        response = requests.get(url)
+        response.raise_for_status()  # Raise exception for 4xx/5xx responses
+        
+        # Return the weather data
+        return jsonify(response.json())
+        
+    except Exception as e:
+        error_message = f"Error fetching weather data: {str(e)}"
+        print(error_message)
+        traceback.print_exc()
+        return jsonify({'error': error_message}), 500
+
+
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
@@ -46,6 +74,22 @@ def upload():
         if file.filename == '':
             print("No file selected")
             return jsonify({'error': 'No file selected'}), 400
+
+        # Get weather data if provided
+        weather_data = None
+        latitude = request.form.get('latitude')
+        longitude = request.form.get('longitude')
+        
+        if latitude and longitude:
+            try:
+                # Call OpenWeatherMap API
+                url = f"https://api.openweathermap.org/data/2.5/weather?lat={latitude}&lon={longitude}&appid={weather_api_key}&units=metric"
+                weather_response = requests.get(url)
+                weather_response.raise_for_status()
+                weather_data = weather_response.json()
+            except Exception as weather_error:
+                print(f"Error fetching weather data: {weather_error}")
+                # Continue even if weather data fetching fails
 
         # Secure filename (important for security!)
         filename = file.filename  # Replace secure_filename with your own secure method or a library
@@ -67,9 +111,16 @@ def upload():
         remixing_suggestions = generate_remixing_suggestions(outfit_description)
         print(f"Remixing suggestions: {remixing_suggestions}")
 
+        # Add weather recommendations if weather data is available
+        weather_recommendations = ""
+        if weather_data:
+            weather_recommendations = get_weather_recommendations(weather_data, feedback)
+            print(f"Weather recommendations: {weather_recommendations}")
+
         return jsonify({
             'feedback': feedback,
             'recommendations': recommendations,
+            'weather_recommendations': weather_recommendations,
             'remixing_suggestions': remixing_suggestions
         })
 
@@ -78,6 +129,46 @@ def upload():
         print(error_message)
         traceback.print_exc()  # Print the full traceback
         return jsonify({'error': error_message}), 500
+
+
+def get_weather_recommendations(weather_data, feedback):
+    if not weather_data:
+        return "Unable to provide weather-based recommendations due to a problem fetching weather data."
+    
+    temperature = weather_data['main']['temp']
+    weather_condition = weather_data['weather'][0]['main'].lower()
+
+    recommendations = ''
+
+    # Check temperature
+    if temperature < 10:
+        recommendations += "It's very cold! "
+        if feedback.lower().includes('shorts'):
+            recommendations += 'Consider wearing pants instead of shorts. '
+        if not feedback.lower().includes('jacket'):
+            recommendations += 'You should wear a jacket. '
+    elif temperature >= 10 and temperature < 20:
+        recommendations += "It's a bit chilly. "
+        if feedback.lower().includes('shorts'):
+            recommendations += 'Consider wearing pants. '
+        if not feedback.lower().includes('jacket'):
+            recommendations += 'A light jacket might be a good idea. '
+    elif temperature >= 20:
+        recommendations += "It's warm! "
+        if feedback.lower().includes('jacket'):
+            recommendations += 'You might want to take off your jacket. '
+        if feedback.lower().includes('pants'):
+            recommendations += 'Consider wearing shorts. '
+
+    # Check weather conditions
+    if 'rain' in weather_condition:
+        recommendations += "It's raining. Don't forget an umbrella or a raincoat!"
+    elif 'snow' in weather_condition:
+        recommendations += "It's snowing. Bundle up and stay warm!"
+    elif 'clear' in weather_condition:
+        recommendations += 'The weather is clear. Enjoy your day!'
+
+    return recommendations
 
 
 def analyze_outfit(image_path):
