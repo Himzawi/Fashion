@@ -5,13 +5,13 @@ from PIL import Image
 import requests
 from dotenv import load_dotenv
 import os
-import traceback  # Import traceback for detailed error logging
+import traceback
 
-# Load environment variables (Api.env should be at the same level as your script or specify the full path)
+# Load environment variables
 load_dotenv("Api.env")
 api_key = os.getenv("OPENROUTER_API_KEY")
 
-# Ensure API key is loaded and raise an exception if it's missing.  This is critical.
+# Ensure API key is loaded
 if not api_key:
     raise ValueError("OPENROUTER_API_KEY is not set in Api.env")
 
@@ -20,19 +20,26 @@ weather_api_key = os.getenv("OPENWEATHER_API_KEY", "f2055b01a1ae00d86ae74afb0d6e
 
 app = Flask(__name__)
 
-# Configure CORS (restrictive in production)
-CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+# Configure CORS - PROPERLY specifying origins
+CORS(app, resources={r"/*": {"origins": ["https://ai-fashion-advisor.web.app", "http://localhost:3000"], 
+                             "methods": ["GET", "POST", "OPTIONS"], 
+                             "allow_headers": ["Content-Type"]}})
 
-# Load CLIP model and processor (move outside the function for faster loading during startup)
+# Load CLIP model and processor
 try:
     model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 except Exception as e:
     print(f"Error loading CLIP model: {e}")
-    raise  # Re-raise the exception to halt the app if the model fails to load
+    raise
 
-# Ensure 'uploads' directory exists (do this only once during startup)
+# Ensure 'uploads' directory exists
 os.makedirs('uploads', exist_ok=True)
+
+# Add a root endpoint to handle those 404 errors
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({"status": "AI Fashion Advisor API is running"}), 200
 
 
 @app.route('/weather', methods=['GET'])
@@ -48,7 +55,7 @@ def get_weather():
         # Call OpenWeatherMap API
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={latitude}&lon={longitude}&appid={weather_api_key}&units=metric"
         response = requests.get(url)
-        response.raise_for_status()  # Raise exception for 4xx/5xx responses
+        response.raise_for_status()
         
         # Return the weather data
         return jsonify(response.json())
@@ -91,10 +98,9 @@ def upload():
                 print(f"Error fetching weather data: {weather_error}")
                 # Continue even if weather data fetching fails
 
-        # Secure filename (important for security!)
-        filename = file.filename  # Replace secure_filename with your own secure method or a library
-        image_path = os.path.join('uploads', filename)  # removed secure_filename for now
-
+        # Save the uploaded file
+        filename = file.filename
+        image_path = os.path.join('uploads', filename)
         file.save(image_path)
         print(f"File saved to: {image_path}")
 
@@ -127,7 +133,7 @@ def upload():
     except Exception as e:
         error_message = f"Error in /upload: {str(e)}"
         print(error_message)
-        traceback.print_exc()  # Print the full traceback
+        traceback.print_exc()
         return jsonify({'error': error_message}), 500
 
 
@@ -143,21 +149,21 @@ def get_weather_recommendations(weather_data, feedback):
     # Check temperature
     if temperature < 10:
         recommendations += "It's very cold! "
-        if feedback.lower().includes('shorts'):
+        if 'shorts' in feedback.lower():  # Fixed includes() to in operator
             recommendations += 'Consider wearing pants instead of shorts. '
-        if not feedback.lower().includes('jacket'):
+        if 'jacket' not in feedback.lower():  # Fixed includes() to in operator
             recommendations += 'You should wear a jacket. '
     elif temperature >= 10 and temperature < 20:
         recommendations += "It's a bit chilly. "
-        if feedback.lower().includes('shorts'):
+        if 'shorts' in feedback.lower():
             recommendations += 'Consider wearing pants. '
-        if not feedback.lower().includes('jacket'):
+        if 'jacket' not in feedback.lower():
             recommendations += 'A light jacket might be a good idea. '
     elif temperature >= 20:
         recommendations += "It's warm! "
-        if feedback.lower().includes('jacket'):
+        if 'jacket' in feedback.lower():
             recommendations += 'You might want to take off your jacket. '
-        if feedback.lower().includes('pants'):
+        if 'pants' in feedback.lower():
             recommendations += 'Consider wearing shorts. '
 
     # Check weather conditions
@@ -228,16 +234,16 @@ def generate_suggestions(style):
 
         print("Request Data:", data)
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=data, headers=headers)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()
         response_json = response.json()
         print("DeepSeek API Response:", response_json)
 
-        if "choices" in response_json and len(response_json["choices"]) > 0:  # Check if choices are available
+        if "choices" in response_json and len(response_json["choices"]) > 0:
             return response_json["choices"][0]["message"]["content"]
         else:
-            return f"Error: No 'choices' found in API response: {response_json}" # More specific error
+            return f"Error: No 'choices' found in API response: {response_json}"
 
-    except requests.exceptions.RequestException as e: # Catch request exceptions (network issues etc.)
+    except requests.exceptions.RequestException as e:
         error_message = f"Network error during API call: {str(e)}"
         print(error_message)
         return error_message
@@ -273,16 +279,16 @@ def generate_remixing_suggestions(outfit_description):
 
         print("Request Data:", data)
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", json=data, headers=headers)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        response.raise_for_status()
         response_json = response.json()
         print("DeepSeek API Response:", response_json)
 
-        if "choices" in response_json and len(response_json["choices"]) > 0:  # Check if choices are available
+        if "choices" in response_json and len(response_json["choices"]) > 0:
             return response_json["choices"][0]["message"]["content"]
         else:
-            return f"Error: No 'choices' found in API response: {response_json}" # More specific error
+            return f"Error: No 'choices' found in API response: {response_json}"
 
-    except requests.exceptions.RequestException as e: # Catch request exceptions (network issues etc.)
+    except requests.exceptions.RequestException as e:
         error_message = f"Network error during API call: {str(e)}"
         print(error_message)
         return error_message
@@ -294,4 +300,5 @@ def generate_remixing_suggestions(outfit_description):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # Use 0.0.0.0 to make it accessible externally
+    app.run(host='0.0.0.0', port=8080, debug=True)
